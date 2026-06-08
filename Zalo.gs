@@ -87,10 +87,29 @@ function soanCanhBaoDongTien() {
   return lines.join('\n');
 }
 
-/** Hàm chạy hằng ngày bởi trigger: cập nhật quá hạn → soạn → gửi Zalo. */
+/**
+ * Gửi email cảnh báo — không cần webhook, Gmail app trên mobile tự hiện notification.
+ * Email đích: Script Properties key EMAIL_CANH_BAO (mặc định: tài khoản đang chạy script).
+ */
+function guiEmail_(noiDung) {
+  const email = getScriptProp_('EMAIL_CANH_BAO') || Session.getActiveUser().getEmail();
+  if (!email) return;
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: '💰 Cảnh báo dòng tiền LAVIPCO — ' + fmtDate_(new Date()),
+      body: noiDung
+    });
+  } catch (e) {
+    console.error('Lỗi gửi email: ' + e);
+  }
+}
+
+/** Hàm chạy hằng ngày bởi trigger: cập nhật quá hạn → soạn → gửi Zalo + Email. */
 function canhBaoHangNgay() {
   capNhatQuaHan();
   const noiDung = soanCanhBaoDongTien();
-  guiZalo_(noiDung);
+  guiZalo_(noiDung);   // gửi Zalo nếu có webhook
+  guiEmail_(noiDung);  // gửi email luôn (Gmail app hiện notification trên mobile)
   return noiDung;
 }
