@@ -542,62 +542,159 @@ function chayCaoBao(){
     .baoCaoDuAn();
 }
 
-// ── Mock google.script.run cho local preview ───────────────────────────────
+// ── Kết nối dữ liệu thật từ Google Sheets khi không chạy trong Apps Script ──────
+var WEB_APP_URL='https://script.google.com/macros/s/AKfycbzMNGOB4VEAJKuM2CHlRX3oRw1eskPu6pUTpvuU4ZxaIkiJvTqr21nNC3fD_IhIuJdQ/exec';
+var SHEET_ID='1GHFKlN5Q86BnYIgyNeQpzP5ODMhWeky7VGE_3qQ1zyw';
+
 if(typeof google==='undefined'||!google.script){
-  var _mock={
-    withSuccessHandler:function(fn){this._ok=fn;return this;},
-    withFailureHandler:function(fn){this._err=fn;return this;},
-    getOverviewData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
-      soDuTK:[{maTK:'1',tenTK:'ACB',soDu:850000000},{maTK:'2',tenTK:'Sacombank',soDu:320000000},{maTK:'3',tenTK:'Tiền mặt',soDu:45000000}],
-      tongSoDu:1215000000,phaiThu:2160000000,phaiTra:630000000,soQuaHan:1,
-      giaoDichGanDay:[
-        {Ngay:new Date(),Loai:'Chi',SoTien:400000000,DienGiai:'[MẪU] Mua vật tư đèn LED',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'},
-        {Ngay:new Date(),Loai:'Chi',SoTien:150000000,DienGiai:'[MẪU] Nhân công lắp đặt',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'},
-        {Ngay:new Date(),Loai:'Thu',SoTien:648000000,DienGiai:'[MẪU] Tạm ứng 30%',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'}
-      ]
-    });},200);},
-    getFormData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
-      taiKhoan:[{id:'1',ten:'ACB'},{id:'2',ten:'Sacombank'},{id:'3',ten:'Tiền mặt'}],
-      hangMuc:[{id:'h1',ten:'Thanh toán đợt',nhom:'Thu'},{id:'h2',ten:'Vật tư',nhom:'Chi'},{id:'h3',ten:'Nhân công',nhom:'Chi'}],
-      duAn:[{id:'da1',ten:'[MẪU] Chiếu sáng Cầu Cả Cấm'}],
-      doiTac:[],keHoach:[{id:'kh1',duAn:'da1',loai:'Thu',dienGiai:'Nghiệm thu đợt 60%',soTien:1296000000}]
-    });},200);},
-    getForecastData:function(){var self=this;setTimeout(function(){self._ok&&self._ok([
-      {thang:'06/2026',thuDuKien:648000000,chiDuKien:1200000000,soDuCuoi:663000000},
-      {thang:'07/2026',thuDuKien:0,chiDuKien:200000000,soDuCuoi:463000000},
-      {thang:'08/2026',thuDuKien:1296000000,chiDuKien:150000000,soDuCuoi:1609000000},
-      {thang:'09/2026',thuDuKien:0,chiDuKien:50000000,soDuCuoi:1559000000},
-      {thang:'10/2026',thuDuKien:216000000,chiDuKien:0,soDuCuoi:1775000000},
-      {thang:'11/2026',thuDuKien:0,chiDuKien:0,soDuCuoi:1775000000}
-    ]);},200);},
-    getCongNoData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
-      phaiThu:[{DienGiai:'[MẪU] Nghiệm thu đợt 60%',NgayDenHan:new Date(Date.now()+86400000*60),SoTienDuKien:1296000000,TrangThai:'ChuaToiHan'},
-               {DienGiai:'[MẪU] Quyết toán 10%',NgayDenHan:new Date(Date.now()-86400000*5),SoTienDuKien:216000000,TrangThai:'QuaHan'}],
-      phaiTra:[{DienGiai:'[MẪU] Thầu phụ kéo cáp',NgayDenHan:new Date(Date.now()+86400000*10),SoTienDuKien:80000000,TrangThai:'ChuaToiHan'}]
-    });},200);},
-    luuGiaoDichTuForm:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,message:'[Preview] Đã lưu (mock).'});},400);},
-    capNhatForecast:function(){var self=this;setTimeout(function(){self._ok&&self._ok();},600);},
-    previewImport:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,rows:[1,2,3],trung:0});},300);},
-    confirmImport:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,message:'[Preview] Import thành công (mock).'});},400);},
-    baoCaoDuAn:function(){var self=this;setTimeout(function(){self._ok&&self._ok();},600);},
-    moFormHoSo:function(){}
+
+  // Fetch 1 sheet qua Google Visualization API (hỗ trợ CORS, sheet đã publish)
+  function gvizFetch(sheetName){
+    var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+
+            '/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(sheetName);
+    return fetch(url).then(function(r){return r.text();}).then(function(txt){
+      var m=txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/);
+      if(!m) return [];
+      var data=JSON.parse(m[1]);
+      if(!data.table||!data.table.cols||!data.table.rows) return [];
+      var cols=data.table.cols.map(function(c){return c.label||c.id||'';});
+      return data.table.rows.map(function(row){
+        var obj={};
+        cols.forEach(function(col,i){
+          var cell=row.c&&row.c[i];
+          var v=cell?cell.v:null;
+          // gviz trả ngày dạng "Date(2026,5,8)" → chuyển sang Date
+          if(typeof v==='string'&&v.indexOf('Date(')===0){
+            var p=v.slice(5,-1).split(',').map(Number);
+            v=new Date(p[0],p[1],p[2]);
+          }
+          obj[col]=v!==null&&v!==undefined?v:'';
+        });
+        return obj;
+      });
+    });
+  }
+
+  // Tính số dư từng TK từ raw data
+  function calcSoDu(tkRows,gdRows){
+    return tkRows.map(function(tk){
+      var soDu=Number(tk['SoDuDauKy'])||0;
+      gdRows.forEach(function(gd){
+        if(gd['MaTK']!==tk['MaTK']) return;
+        var so=Number(gd['SoTien'])||0;
+        if(gd['Loai']==='Thu') soDu+=so; else if(gd['Loai']==='Chi') soDu-=so;
+      });
+      return{maTK:tk['MaTK'],tenTK:tk['TenTK'],soDu:soDu};
+    });
+  }
+
+  // Bọc callback kiểu google.script.run
+  function runAsync(fn,successCb,failCb){
+    fn().then(function(r){if(successCb) successCb(r);})
+        .catch(function(e){if(failCb) failCb(e);});
+  }
+
+  // Tạo chainable wrapper giống google.script.run
+  function makeCall(asyncFn){
+    var obj={_ok:null,_err:null};
+    obj.withSuccessHandler=function(fn){obj._ok=fn;return obj;};
+    obj.withFailureHandler=function(fn){obj._err=fn;return obj;};
+    // Hàm gọi thực sự — trả về khi được invoke
+    obj._invoke=function(){runAsync(asyncFn,obj._ok,obj._err);};
+    return obj;
+  }
+
+  // Tạo đối tượng thay thế google.script.run
+  var GS={};
+
+  GS.getOverviewData=function(){
+    return makeCall(function(){
+      return Promise.all([
+        gvizFetch('DM_TaiKhoan'),gvizFetch('GiaoDich'),
+        gvizFetch('KeHoach'),gvizFetch('DM_DuAn')
+      ]).then(function(res){
+        var tk=res[0],gd=res[1],kh=res[2],da=res[3];
+        var soDuTK=calcSoDu(tk,gd);
+        var tongSoDu=soDuTK.reduce(function(s,t){return s+t.soDu;},0);
+        var pThu=kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';});
+        var pTra=kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';});
+        var sumKH=function(arr){return arr.reduce(function(s,k){return s+(Number(k['SoTienDuKien'])||0);},0);};
+        var soQuaHan=pThu.concat(pTra).filter(function(k){return k['TrangThai']==='QuaHan';}).length;
+        var daMap={};da.forEach(function(d){daMap[d['MaDuAn']]=d['TenDuAn'];});
+        var gdSorted=gd.slice().sort(function(a,b){return new Date(b['Ngay'])-new Date(a['Ngay']);}).slice(0,10)
+          .map(function(g){return{Ngay:g['Ngay'],Loai:g['Loai'],SoTien:g['SoTien'],DienGiai:g['DienGiai'],
+            MaDuAn:g['MaDuAn'],TenDuAn:daMap[g['MaDuAn']]||''};});
+        return{soDuTK:soDuTK,tongSoDu:tongSoDu,phaiThu:sumKH(pThu),phaiTra:sumKH(pTra),
+               soQuaHan:soQuaHan,giaoDichGanDay:gdSorted};
+      });
+    });
   };
-  window.google={script:{run:_mock}};
-  // Mỗi lần gọi trả về instance mới để chain withSuccessHandler độc lập
-  var _base=_mock;
-  window.google.script.run=new Proxy(_base,{get:function(t,k){
-    if(k==='withSuccessHandler'||k==='withFailureHandler') return function(fn){
-      var inst=Object.assign(Object.create(null),_base);
-      inst._ok=k==='withSuccessHandler'?fn:undefined;
-      inst._err=k==='withFailureHandler'?fn:undefined;
-      return new Proxy(inst,{get:function(t2,k2){
-        if(k2==='withSuccessHandler') return function(f){t2._ok=f;return t2;};
-        if(k2==='withFailureHandler') return function(f){t2._err=f;return t2;};
-        return function(){if(typeof _base[k2]==='function') _base[k2].call(t2,...arguments);};
-      }});
-    };
-    return t[k];
-  }});
+
+  GS.getFormData=function(){
+    return makeCall(function(){
+      return Promise.all([
+        gvizFetch('DM_TaiKhoan'),gvizFetch('DM_HangMuc'),
+        gvizFetch('DM_DuAn'),gvizFetch('DM_DoiTac'),gvizFetch('KeHoach')
+      ]).then(function(res){
+        return{
+          taiKhoan:res[0].map(function(t){return{id:t['MaTK'],ten:t['TenTK']};}),
+          hangMuc: res[1].map(function(h){return{id:h['MaHangMuc'],ten:h['Ten'],nhom:h['Nhom']};}),
+          duAn:    res[2].map(function(d){return{id:d['MaDuAn'],ten:d['TenDuAn']};}),
+          doiTac:  res[3].map(function(d){return{id:d['MaDoiTac'],ten:d['Ten']};}),
+          keHoach: res[4].filter(function(k){return k['TrangThai']!=='DaThucHien';})
+                        .map(function(k){return{id:k['MaKH'],duAn:k['MaDuAn'],loai:k['Loai'],
+                                                dienGiai:k['DienGiai'],soTien:k['SoTienDuKien']};})
+        };
+      });
+    });
+  };
+
+  GS.getForecastData=function(){
+    return makeCall(function(){
+      return gvizFetch('Forecast').then(function(rows){
+        return rows.map(function(r){
+          return{thang:r['Tháng']||'',
+            soDuDau:Number(r['Số dư đầu (₫)'])||0,
+            thuDuKien:Number(r['Thu dự kiến (₫)'])||0,
+            chiDuKien:Number(r['Chi dự kiến (₫)'])||0,
+            soDuCuoi:Number(r['Số dư cuối lũy kế (₫)'])||0};
+        });
+      });
+    });
+  };
+
+  GS.getCongNoData=function(){
+    return makeCall(function(){
+      return gvizFetch('KeHoach').then(function(kh){
+        return{
+          phaiThu:kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';}),
+          phaiTra:kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';})
+        };
+      });
+    });
+  };
+
+  // Các thao tác ghi → chuyển hướng sang web app thật
+  var writeMsg=function(){
+    alert('Tính năng này cần đăng nhập Google.\nMở app đầy đủ tại:\n'+WEB_APP_URL);
+    return makeCall(function(){return Promise.resolve({ok:false,message:'Dùng web app để nhập liệu.'});});
+  };
+  GS.luuGiaoDichTuForm=writeMsg;
+  GS.capNhatForecast=writeMsg;
+  GS.previewImport=writeMsg;
+  GS.confirmImport=writeMsg;
+  GS.baoCaoDuAn=writeMsg;
+  GS.moFormHoSo=function(){window.open(WEB_APP_URL,'_blank');};
+
+  // Tạo Proxy để gọi ._invoke() tự động khi chaining kết thúc
+  window.google={script:{run:new Proxy(GS,{
+    get:function(target,key){
+      var obj=target[key]?target[key]():makeCall(function(){return Promise.resolve();});
+      // Tự động invoke sau 0ms (sau khi chain withSuccessHandler xong)
+      setTimeout(function(){obj._invoke&&obj._invoke();},0);
+      return obj;
+    }
+  })}};
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
