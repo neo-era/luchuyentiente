@@ -258,6 +258,7 @@
       <button class="btn-submit" style="margin-top:16px" onclick="chayCaoBao()">Tạo báo cáo</button>
       <div class="msg" id="msg-bc" style="margin-top:10px"></div>
     </div>
+    <div id="webapp-banner" style="display:none"></div>
   </div>
 
 </div><!-- /panels -->
@@ -664,6 +665,24 @@ if(typeof google==='undefined'||!google.script){
   GS.moFormHoSo=function(){window.open(WEB_APP_URL,'_blank');};
 
   // Builder: google.script.run.withSuccessHandler(fn).functionName(args)
+  function showWebAppBanner(){
+    var existing=document.getElementById('_webapp_toast');
+    if(existing) existing.remove();
+    var el=document.createElement('div');
+    el.id='_webapp_toast';
+    el.style.cssText='position:fixed;bottom:70px;left:12px;right:12px;background:#1f3864;color:#fff;'+
+      'border-radius:12px;padding:14px 16px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.3);'+
+      'font-size:14px;line-height:1.5;animation:fadeIn .2s ease';
+    el.innerHTML='<strong>⚡ Tính năng này cần App Script</strong><br>'+
+      'Trang này chỉ xem dữ liệu (read-only).<br>'+
+      '<a href="'+WEB_APP_URL+'" target="_blank" style="color:#81e683;font-weight:700">'+
+      '→ Mở App đầy đủ để nhập liệu</a>'+
+      '<span onclick="this.parentNode.remove()" style="float:right;cursor:pointer;opacity:.7;'+
+      'margin-left:8px">✕</span>';
+    document.body.appendChild(el);
+    setTimeout(function(){if(el.parentNode) el.remove();},6000);
+  }
+
   function makeRunner(okCb, errCb) {
     function run(asyncFn) {
       asyncFn()
@@ -671,9 +690,8 @@ if(typeof google==='undefined'||!google.script){
         .catch(function(e){ if(errCb) errCb(e); });
     }
     var notAvail = function(){
-      var msg = 'Tính năng này cần App Script.\nMở: ' + WEB_APP_URL;
-      alert(msg);
-      if(okCb) okCb({ok:false, message:'Dùng web app để nhập liệu.'});
+      showWebAppBanner();
+      if(okCb) okCb({ok:false, message:'Tính năng này chỉ khả dụng trong App Script.'});
     };
     return {
       withSuccessHandler: function(fn){ return makeRunner(fn, errCb); },
