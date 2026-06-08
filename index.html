@@ -548,30 +548,41 @@ var SHEET_ID='1GHFKlN5Q86BnYIgyNeQpzP5ODMhWeky7VGE_3qQ1zyw';
 
 if(typeof google==='undefined'||!google.script){
 
-  // Fetch 1 sheet qua Google Visualization API (hỗ trợ CORS, sheet đã publish)
+  // Fetch sheet qua JSONP — tránh CORS, chỉ cần sheet đã Publish to web
   function gvizFetch(sheetName){
-    var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+
-            '/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(sheetName);
-    return fetch(url).then(function(r){return r.text();}).then(function(txt){
-      var m=txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/);
-      if(!m) return [];
-      var data=JSON.parse(m[1]);
-      if(!data.table||!data.table.cols||!data.table.rows) return [];
-      var cols=data.table.cols.map(function(c){return c.label||c.id||'';});
-      return data.table.rows.map(function(row){
-        var obj={};
-        cols.forEach(function(col,i){
-          var cell=row.c&&row.c[i];
-          var v=cell?cell.v:null;
-          // gviz trả ngày dạng "Date(2026,5,8)" → chuyển sang Date
-          if(typeof v==='string'&&v.indexOf('Date(')===0){
-            var p=v.slice(5,-1).split(',').map(Number);
-            v=new Date(p[0],p[1],p[2]);
-          }
-          obj[col]=v!==null&&v!==undefined?v:'';
-        });
-        return obj;
-      });
+    return new Promise(function(resolve,reject){
+      var cb='_gviz_'+Math.random().toString(36).slice(2);
+      var script=document.createElement('script');
+      var timer=setTimeout(function(){
+        cleanup(); reject(new Error('Timeout: '+sheetName));
+      },10000);
+      function cleanup(){
+        clearTimeout(timer);
+        delete window[cb];
+        if(script.parentNode) script.parentNode.removeChild(script);
+      }
+      window[cb]=function(resp){
+        cleanup();
+        if(!resp||!resp.table){resolve([]);return;}
+        var cols=resp.table.cols.map(function(c){return c.label||c.id||'';});
+        resolve((resp.table.rows||[]).map(function(row){
+          var obj={};
+          cols.forEach(function(col,i){
+            var cell=row.c&&row.c[i];
+            var v=cell?cell.v:null;
+            if(typeof v==='string'&&v.indexOf('Date(')===0){
+              var p=v.slice(5,-1).split(',').map(Number);
+              v=new Date(p[0],p[1],p[2]);
+            }
+            obj[col]=(v!==null&&v!==undefined)?v:'';
+          });
+          return obj;
+        }));
+      };
+      script.onerror=function(){cleanup();reject(new Error('Load failed: '+sheetName));};
+      script.src='https://docs.google.com/spreadsheets/d/'+SHEET_ID+
+        '/gviz/tq?tqx=responseHandler:'+cb+'&sheet='+encodeURIComponent(sheetName);
+      document.head.appendChild(script);
     });
   }
 
