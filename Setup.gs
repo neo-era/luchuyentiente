@@ -41,6 +41,7 @@ function setup() {
 
   seedTaiKhoan_();
   seedHangMuc_();
+  setupNamedRanges_();
 
   const def = ss.getSheetByName('Sheet1');
   if (def && ss.getSheets().length > 1 && def.getLastRow() === 0) {
@@ -74,6 +75,29 @@ function seedHangMuc_() {
     appendRow_(CONFIG.SHEETS.DM_HANGMUC, {
       MaHangMuc: genId_(), Ten: hm.ten, Nhom: hm.nhom, PhanLoaiChi: hm.phanLoai
     });
+  });
+}
+
+/**
+ * Tạo named range trỏ đến cột ID của từng sheet master để dùng trong data validation dropdown.
+ * Idempotent — gọi lại chỉ cập nhật lại range.
+ */
+function setupNamedRanges_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const targets = [
+    { name: 'NR_MaDuAn',   sheet: CONFIG.SHEETS.DM_DUAN,     col: 1 },
+    { name: 'NR_MaDoiTac', sheet: CONFIG.SHEETS.DM_DOITAC,   col: 1 },
+    { name: 'NR_MaHangMuc',sheet: CONFIG.SHEETS.DM_HANGMUC,  col: 1 },
+    { name: 'NR_MaTK',     sheet: CONFIG.SHEETS.DM_TAIKHOAN, col: 1 },
+  ];
+  targets.forEach(function (t) {
+    const sh = getSheet_(t.sheet);
+    // Trỏ đến hàng 2 → 1000 của cột ID (bỏ qua header)
+    const range = sh.getRange(2, t.col, 999, 1);
+    // Xóa named range cũ nếu có để tránh trùng
+    const existing = ss.getNamedRanges().filter(function (nr) { return nr.getName() === t.name; });
+    existing.forEach(function (nr) { nr.remove(); });
+    ss.setNamedRange(t.name, range);
   });
 }
 

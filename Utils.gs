@@ -16,7 +16,10 @@ function genId_() {
 
 function formatVND_(n) {
   n = Math.round(Number(n) || 0);
-  return n.toLocaleString('vi-VN') + ' ₫';
+  // toLocaleString không ổn định trong V8 runtime — dùng regex
+  const sign = n < 0 ? '-' : '';
+  const abs = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return sign + abs + ' ₫';
 }
 
 function toDate_(v) {
@@ -90,4 +93,29 @@ function updateRowById_(sheetName, idCol, idVal, patch) {
 function findById_(sheetName, idCol, idVal) {
   const found = readRows_(sheetName).filter(function (o) { return String(o[idCol]) === String(idVal); });
   return found.length ? found[0] : null;
+}
+
+/** Chạy từ Apps Script editor để kiểm tra readRows/appendRow/updateRowById. Xóa sheet _Test sau khi xong. */
+function testUtils_() {
+  const SHEET = '_Test';
+  const sh = getSheet_(SHEET);
+  sh.clearContents();
+  sh.getRange(1, 1, 1, 3).setValues([['Id', 'Ten', 'SoTien']]);
+
+  appendRow_(SHEET, { Id: 'T1', Ten: 'Alpha', SoTien: 1000000 });
+  appendRow_(SHEET, { Id: 'T2', Ten: 'Beta',  SoTien: 2500000 });
+
+  const rows = readRows_(SHEET);
+  if (rows.length !== 2) throw new Error('readRows_ sai — expect 2, got ' + rows.length);
+  if (rows[0].Ten !== 'Alpha') throw new Error('readRows_ sai tên: ' + rows[0].Ten);
+
+  updateRowById_(SHEET, 'Id', 'T1', { SoTien: 9999999 });
+  const updated = findById_(SHEET, 'Id', 'T1');
+  if (updated.SoTien !== 9999999) throw new Error('updateRowById_ sai: ' + updated.SoTien);
+
+  const fmt = formatVND_(1234567);
+  if (fmt !== '1.234.567 ₫') throw new Error('formatVND_ sai: ' + fmt);
+
+  SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sh);
+  Logger.log('testUtils_ PASSED');
 }

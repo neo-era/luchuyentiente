@@ -1,4 +1,17 @@
 {
-  "scriptId": "DIEN_SCRIPT_ID_VAO_DAY",
-  "rootDir": "."
+  "scriptId": "1gDUrUMvltn3TYoJSZ1YIQzQZ-aeiMCTQN1g3nW7xNeFij-ocJdtOaGHU",
+  "rootDir": ".",
+  "parentId": "1GHFKlN5Q86BnYIgyNeQpzP5ODMhWeky7VGE_3qQ1zyw",
+  "scriptExtensions": [
+    ".js",
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [],
+  "skipSubdirectories": false
 }
