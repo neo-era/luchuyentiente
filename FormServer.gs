@@ -10,7 +10,7 @@ function moFormNhap() {
 
 /** Web app entry point — phục vụ giao diện tổng quan trung tâm. */
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Dòng tiền LAVIPCO')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
 }
