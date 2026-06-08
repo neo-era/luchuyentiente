@@ -4,60 +4,68 @@
  */
 
 function capNhatForecast() {
-  const sh = getSheet_(CONFIG.SHEETS.FORECAST);
-  sh.clear();
+  const today     = new Date();
+  const soThang   = CONFIG.FORECAST_THANG;
 
-  const kh = readRows_(CONFIG.SHEETS.KEHOACH).filter(function (k) {
-    return k.TrangThai !== CONFIG.TRANG_THAI_KH.DA;
+  // KeHoach chưa thực hiện
+  const keHoach = readRows_(CONFIG.SHEETS.KEHOACH).filter(function(r) {
+    return r.TrangThai !== CONFIG.TRANG_THAI_KH.DA;
   });
 
-  const now = new Date();
-  const months = [];
-  for (let i = 0; i < CONFIG.FORECAST_THANG; i++) {
-    months.push(new Date(now.getFullYear(), now.getMonth() + i, 1));
-  }
+  // Tính lũy kế theo từng tháng
+  let soDuDau = soDuHienTai_();
+  const forecastRows = [];
 
-  const header = ['Chỉ tiêu'].concat(months.map(function (m) {
-    return Utilities.formatDate(m, CONFIG.TIMEZONE, 'MM/yyyy');
-  }));
-  const dauRow = ['Số dư đầu'];
-  const thuRow = ['Thu dự kiến'];
-  const chiRow = ['Chi dự kiến'];
-  const cuoiRow = ['Số dư cuối'];
+  for (let i = 0; i < soThang; i++) {
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const endOfMonth   = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
 
-  let prevCuoi = soDuHienTai().tong;
-  months.forEach(function (m, idx) {
-    const start = new Date(m.getFullYear(), m.getMonth(), 1);
-    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
-    let thu = 0, chi = 0;
-    kh.forEach(function (k) {
-      const due = toDate_(k.NgayDenHan);
-      if (!due) return;
-      // Tháng đầu gom luôn các khoản quá hạn (due <= cuối tháng đầu).
-      const inBucket = (idx === 0) ? (due <= end) : (due >= start && due <= end);
-      if (!inBucket) return;
-      const amt = Number(k.SoTienDuKien) || 0;
-      if (k.Loai === 'Thu') thu += amt; else chi += amt;
+    let thuDuKien = 0;
+    let chiDuKien = 0;
+
+    keHoach.forEach(function(kh) {
+      const ngay = toDate_(kh.NgayDenHan);
+      if (!ngay || ngay < startOfMonth || ngay > endOfMonth) return;
+      const so = Number(kh.SoTienDuKien) || 0;
+      if (kh.Loai === 'Thu') thuDuKien += so;
+      else if (kh.Loai === 'Chi') chiDuKien += so;
     });
-    const dau = prevCuoi;
-    const cuoi = dau + thu - chi;
-    dauRow.push(dau); thuRow.push(thu); chiRow.push(chi); cuoiRow.push(cuoi);
-    prevCuoi = cuoi;
+
+    const soDuCuoi = soDuDau + thuDuKien - chiDuKien;
+    const thangLabel = Utilities.formatDate(startOfMonth, CONFIG.TIMEZONE, 'MM/yyyy');
+    forecastRows.push([thangLabel, soDuDau, thuDuKien, chiDuKien, soDuCuoi]);
+    soDuDau = soDuCuoi;
+  }
+
+  // Ghi ra sheet Forecast
+  const sh = getSheet_(CONFIG.SHEETS.FORECAST);
+  sh.clearContents();
+  sh.clearFormats();
+
+  const headers = ['Tháng', 'Số dư đầu (₫)', 'Thu dự kiến (₫)', 'Chi dự kiến (₫)', 'Số dư cuối lũy kế (₫)'];
+  sh.getRange(1, 1, 1, headers.length)
+    .setValues([headers])
+    .setFontWeight('bold')
+    .setBackground('#1f3864')
+    .setFontColor('#ffffff');
+  sh.setFrozenRows(1);
+
+  if (!forecastRows.length) return;
+
+  sh.getRange(2, 1, forecastRows.length, 5).setValues(forecastRows);
+  // Định dạng cột tiền
+  sh.getRange(2, 2, forecastRows.length, 4).setNumberFormat('#,##0 "₫"');
+
+  // Tô đỏ ô Số dư cuối nếu âm — cảnh báo cash gap
+  forecastRows.forEach(function(row, i) {
+    const cell = sh.getRange(i + 2, 5);
+    if (row[4] < 0) {
+      cell.setBackground('#f4cccc').setFontColor('#cc0000').setFontWeight('bold');
+    } else {
+      cell.setBackground(null).setFontColor(null).setFontWeight('normal');
+    }
   });
 
-  sh.getRange(1, 1, 1, header.length).setValues([header])
-    .setFontWeight('bold').setBackground('#1f3864').setFontColor('#ffffff');
-  const body = [dauRow, thuRow, chiRow, cuoiRow];
-  sh.getRange(2, 1, body.length, header.length).setValues(body);
-  sh.getRange(2, 2, body.length, header.length - 1).setNumberFormat('#,##0 "\u20ab"');
-  sh.getRange(5, 1, 1, header.length).setFontWeight('bold');
-
-  // Tô đỏ ô "Số dư cuối" < 0 (cash gap).
-  for (let c = 2; c <= header.length; c++) {
-    if (Number(cuoiRow[c - 1]) < 0) {
-      sh.getRange(5, c).setBackground('#f4cccc').setFontColor('#cc0000');
-    }
-  }
-  sh.setColumnWidth(1, 120);
-  SpreadsheetApp.getActiveSpreadsheet().toast('Đã cập nhật Forecast.', '💰 Dòng tiền', 4);
+  sh.autoResizeColumns(1, 5);
 }
