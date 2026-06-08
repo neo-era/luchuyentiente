@@ -588,113 +588,99 @@ if(typeof google==='undefined'||!google.script){
     });
   }
 
-  // Bọc callback kiểu google.script.run
-  function runAsync(fn,successCb,failCb){
-    fn().then(function(r){if(successCb) successCb(r);})
-        .catch(function(e){if(failCb) failCb(e);});
-  }
-
-  // Tạo chainable wrapper giống google.script.run
-  function makeCall(asyncFn){
-    var obj={_ok:null,_err:null};
-    obj.withSuccessHandler=function(fn){obj._ok=fn;return obj;};
-    obj.withFailureHandler=function(fn){obj._err=fn;return obj;};
-    // Hàm gọi thực sự — trả về khi được invoke
-    obj._invoke=function(){runAsync(asyncFn,obj._ok,obj._err);};
-    return obj;
-  }
-
-  // Tạo đối tượng thay thế google.script.run
+  // Các hàm GS trả về Promise trực tiếp
   var GS={};
 
   GS.getOverviewData=function(){
-    return makeCall(function(){
-      return Promise.all([
-        gvizFetch('DM_TaiKhoan'),gvizFetch('GiaoDich'),
-        gvizFetch('KeHoach'),gvizFetch('DM_DuAn')
-      ]).then(function(res){
-        var tk=res[0],gd=res[1],kh=res[2],da=res[3];
-        var soDuTK=calcSoDu(tk,gd);
-        var tongSoDu=soDuTK.reduce(function(s,t){return s+t.soDu;},0);
-        var pThu=kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';});
-        var pTra=kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';});
-        var sumKH=function(arr){return arr.reduce(function(s,k){return s+(Number(k['SoTienDuKien'])||0);},0);};
-        var soQuaHan=pThu.concat(pTra).filter(function(k){return k['TrangThai']==='QuaHan';}).length;
-        var daMap={};da.forEach(function(d){daMap[d['MaDuAn']]=d['TenDuAn'];});
-        var gdSorted=gd.slice().sort(function(a,b){return new Date(b['Ngay'])-new Date(a['Ngay']);}).slice(0,10)
-          .map(function(g){return{Ngay:g['Ngay'],Loai:g['Loai'],SoTien:g['SoTien'],DienGiai:g['DienGiai'],
-            MaDuAn:g['MaDuAn'],TenDuAn:daMap[g['MaDuAn']]||''};});
-        return{soDuTK:soDuTK,tongSoDu:tongSoDu,phaiThu:sumKH(pThu),phaiTra:sumKH(pTra),
-               soQuaHan:soQuaHan,giaoDichGanDay:gdSorted};
-      });
+    return Promise.all([
+      gvizFetch('DM_TaiKhoan'),gvizFetch('GiaoDich'),
+      gvizFetch('KeHoach'),gvizFetch('DM_DuAn')
+    ]).then(function(res){
+      var tk=res[0],gd=res[1],kh=res[2],da=res[3];
+      var soDuTK=calcSoDu(tk,gd);
+      var tongSoDu=soDuTK.reduce(function(s,t){return s+t.soDu;},0);
+      var pThu=kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';});
+      var pTra=kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';});
+      var sumKH=function(arr){return arr.reduce(function(s,k){return s+(Number(k['SoTienDuKien'])||0);},0);};
+      var soQuaHan=pThu.concat(pTra).filter(function(k){return k['TrangThai']==='QuaHan';}).length;
+      var daMap={};da.forEach(function(d){daMap[d['MaDuAn']]=d['TenDuAn'];});
+      var gdSorted=gd.slice().sort(function(a,b){return new Date(b['Ngay'])-new Date(a['Ngay']);}).slice(0,10)
+        .map(function(g){return{Ngay:g['Ngay'],Loai:g['Loai'],SoTien:g['SoTien'],DienGiai:g['DienGiai'],
+          MaDuAn:g['MaDuAn'],TenDuAn:daMap[g['MaDuAn']]||''};});
+      return{soDuTK:soDuTK,tongSoDu:tongSoDu,phaiThu:sumKH(pThu),phaiTra:sumKH(pTra),
+             soQuaHan:soQuaHan,giaoDichGanDay:gdSorted};
     });
   };
 
   GS.getFormData=function(){
-    return makeCall(function(){
-      return Promise.all([
-        gvizFetch('DM_TaiKhoan'),gvizFetch('DM_HangMuc'),
-        gvizFetch('DM_DuAn'),gvizFetch('DM_DoiTac'),gvizFetch('KeHoach')
-      ]).then(function(res){
-        return{
-          taiKhoan:res[0].map(function(t){return{id:t['MaTK'],ten:t['TenTK']};}),
-          hangMuc: res[1].map(function(h){return{id:h['MaHangMuc'],ten:h['Ten'],nhom:h['Nhom']};}),
-          duAn:    res[2].map(function(d){return{id:d['MaDuAn'],ten:d['TenDuAn']};}),
-          doiTac:  res[3].map(function(d){return{id:d['MaDoiTac'],ten:d['Ten']};}),
-          keHoach: res[4].filter(function(k){return k['TrangThai']!=='DaThucHien';})
-                        .map(function(k){return{id:k['MaKH'],duAn:k['MaDuAn'],loai:k['Loai'],
-                                                dienGiai:k['DienGiai'],soTien:k['SoTienDuKien']};})
-        };
-      });
+    return Promise.all([
+      gvizFetch('DM_TaiKhoan'),gvizFetch('DM_HangMuc'),
+      gvizFetch('DM_DuAn'),gvizFetch('DM_DoiTac'),gvizFetch('KeHoach')
+    ]).then(function(res){
+      return{
+        taiKhoan:res[0].map(function(t){return{id:t['MaTK'],ten:t['TenTK']};}),
+        hangMuc: res[1].map(function(h){return{id:h['MaHangMuc'],ten:h['Ten'],nhom:h['Nhom']};}),
+        duAn:    res[2].map(function(d){return{id:d['MaDuAn'],ten:d['TenDuAn']};}),
+        doiTac:  res[3].map(function(d){return{id:d['MaDoiTac'],ten:d['Ten']};}),
+        keHoach: res[4].filter(function(k){return k['TrangThai']!=='DaThucHien';})
+                      .map(function(k){return{id:k['MaKH'],duAn:k['MaDuAn'],loai:k['Loai'],
+                                              dienGiai:k['DienGiai'],soTien:k['SoTienDuKien']};})
+      };
     });
   };
 
   GS.getForecastData=function(){
-    return makeCall(function(){
-      return gvizFetch('Forecast').then(function(rows){
-        return rows.map(function(r){
-          return{thang:r['Tháng']||'',
-            soDuDau:Number(r['Số dư đầu (₫)'])||0,
-            thuDuKien:Number(r['Thu dự kiến (₫)'])||0,
-            chiDuKien:Number(r['Chi dự kiến (₫)'])||0,
-            soDuCuoi:Number(r['Số dư cuối lũy kế (₫)'])||0};
-        });
+    return gvizFetch('Forecast').then(function(rows){
+      return rows.map(function(r){
+        return{thang:r['Tháng']||'',
+          soDuDau:   Number(r['Số dư đầu (₫)'])||0,
+          thuDuKien: Number(r['Thu dự kiến (₫)'])||0,
+          chiDuKien: Number(r['Chi dự kiến (₫)'])||0,
+          soDuCuoi:  Number(r['Số dư cuối lũy kế (₫)'])||0};
       });
     });
   };
 
   GS.getCongNoData=function(){
-    return makeCall(function(){
-      return gvizFetch('KeHoach').then(function(kh){
-        return{
-          phaiThu:kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';}),
-          phaiTra:kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';})
-        };
-      });
+    return gvizFetch('KeHoach').then(function(kh){
+      return{
+        phaiThu:kh.filter(function(k){return k['Loai']==='Thu'&&k['TrangThai']!=='DaThucHien';}),
+        phaiTra:kh.filter(function(k){return k['Loai']==='Chi'&&k['TrangThai']!=='DaThucHien';})
+      };
     });
   };
 
-  // Các thao tác ghi → chuyển hướng sang web app thật
-  var writeMsg=function(){
-    alert('Tính năng này cần đăng nhập Google.\nMở app đầy đủ tại:\n'+WEB_APP_URL);
-    return makeCall(function(){return Promise.resolve({ok:false,message:'Dùng web app để nhập liệu.'});});
-  };
-  GS.luuGiaoDichTuForm=writeMsg;
-  GS.capNhatForecast=writeMsg;
-  GS.previewImport=writeMsg;
-  GS.confirmImport=writeMsg;
-  GS.baoCaoDuAn=writeMsg;
   GS.moFormHoSo=function(){window.open(WEB_APP_URL,'_blank');};
 
-  // Tạo Proxy để gọi ._invoke() tự động khi chaining kết thúc
-  window.google={script:{run:new Proxy(GS,{
-    get:function(target,key){
-      var obj=target[key]?target[key]():makeCall(function(){return Promise.resolve();});
-      // Tự động invoke sau 0ms (sau khi chain withSuccessHandler xong)
-      setTimeout(function(){obj._invoke&&obj._invoke();},0);
-      return obj;
+  // Builder: google.script.run.withSuccessHandler(fn).functionName(args)
+  function makeRunner(okCb, errCb) {
+    function run(asyncFn) {
+      asyncFn()
+        .then(function(r){ if(okCb) okCb(r); })
+        .catch(function(e){ if(errCb) errCb(e); });
     }
-  })}};
+    var notAvail = function(){
+      var msg = 'Tính năng này cần App Script.\nMở: ' + WEB_APP_URL;
+      alert(msg);
+      if(okCb) okCb({ok:false, message:'Dùng web app để nhập liệu.'});
+    };
+    return {
+      withSuccessHandler: function(fn){ return makeRunner(fn, errCb); },
+      withFailureHandler: function(fn){ return makeRunner(okCb, fn); },
+      getOverviewData:    function(){ run(function(){ return GS.getOverviewData(); }); },
+      getFormData:        function(){ run(function(){ return GS.getFormData(); }); },
+      getForecastData:    function(){ run(function(){ return GS.getForecastData(); }); },
+      getCongNoData:      function(){ run(function(){ return GS.getCongNoData(); }); },
+      luuGiaoDichTuForm:  notAvail,
+      capNhatForecast:    notAvail,
+      previewImport:      notAvail,
+      confirmImport:      notAvail,
+      baoCaoDuAn:         notAvail,
+      moFormHoSo: function(){ window.open(WEB_APP_URL,'_blank'); }
+    };
+  }
+
+  window.google = { script: { run: makeRunner(null, null) } };
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
