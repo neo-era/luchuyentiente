@@ -1,0 +1,12 @@
+# clasp credentials — KHÔNG commit vào repo
+.clasprc.json
+node_modules/
+npm-debug.log*
+
+# Secret / env
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db

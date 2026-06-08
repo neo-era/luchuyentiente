@@ -1,0 +1,17 @@
+{
+  "name": "lavipco-cashflow",
+  "version": "1.0.0",
+  "description": "App quản lý dòng tiền LAVIPCO — Google Sheets + Apps Script",
+  "scripts": {
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "open": "clasp open",
+    "deploy": "clasp deploy"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
