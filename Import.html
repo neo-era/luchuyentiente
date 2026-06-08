@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: #f5f6f8; color: #222; }
+    h2 { margin: 0 0 8px; color: #1f3864; font-size: 18px; }
+    p.note { font-size: 12px; color: #666; margin: 0 0 12px; }
+    label { display: block; font-size: 13px; font-weight: bold; margin: 10px 0 4px; }
+    select, textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px; }
+    textarea { font-family: monospace; }
+    .row { display: flex; gap: 8px; } .row > div { flex: 1; }
+    .btn { margin-top: 12px; padding: 12px 16px; background: #1f3864; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn.sec { background: #fff; color: #1f3864; border: 1px solid #1f3864; }
+    .btn:disabled { opacity: .5; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    th { background: #eef; }
+    tr.dup { color: #b00; background: #fdeaea; }
+    .right { text-align: right; }
+    #summary { margin-top: 10px; font-size: 13px; font-weight: bold; }
+    #msg { margin-top: 12px; padding: 10px; border-radius: 8px; display: none; font-size: 14px; }
+    .ok { background: #d9ead3; color: #274e13; } .err { background: #f4cccc; color: #990000; }
+    .wrap { max-height: 260px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h2>📥 Import sao kê ngân hàng</h2>
+  <p class="note">Copy các dòng sao kê từ Excel (gồm cả hàng tiêu đề) rồi dán vào ô bên dưới. Hỗ trợ ACB / Sacombank và sao kê khác — tự nhận diện cột Ngày, Ghi nợ/Ghi có (hoặc Số tiền), Nội dung.</p>
+
+  <div class="row">
+    <div>
+      <label>Tài khoản nhận</label>
+      <select id="maTK"></select>
+    </div>
+    <div>
+      <label>Gán dự án (tùy chọn)</label>
+      <select id="maDuAn"><option value="">— Để trống —</option></select>
+    </div>
+  </div>
+
+  <label>Dữ liệu sao kê</label>
+  <textarea id="raw" rows="8" placeholder="Ngày&#9;Ghi nợ&#9;Ghi có&#9;Nội dung&#10;01/06/2026&#9;&#9;660.000.000&#9;Tạm ứng HĐ Cầu Cả Cấm&#10;02/06/2026&#9;400.000.000&#9;&#9;Mua vật tư"></textarea>
+
+  <button class="btn sec" id="btnPreview" onclick="xemTruoc()">Xem trước</button>
+  <button class="btn" id="btnConfirm" onclick="xacNhan()" disabled>Xác nhận import</button>
+
+  <div id="summary"></div>
+  <div class="wrap"><table id="tbl" style="display:none"><thead><tr><th>Ngày</th><th>Loại</th><th class="right">Số tiền</th><th>Nội dung</th></tr></thead><tbody></tbody></table></div>
+  <div id="msg"></div>
+
+  <script>
+    function opt(v, t) { var o = document.createElement('option'); o.value = v; o.textContent = t; return o; }
+    function fill(id, arr, blank) {
+      var s = document.getElementById(id); s.innerHTML = '';
+      if (blank) s.appendChild(opt('', blank));
+      arr.forEach(function (x) { s.appendChild(opt(x.id, x.ten)); });
+    }
+    function show(m, ok) { var e = document.getElementById('msg'); e.textContent = m; e.className = ok ? 'ok' : 'err'; e.style.display = 'block'; }
+    function vnd(n) { return Number(n).toLocaleString('vi-VN') + ' ₫'; }
+
+    google.script.run.withSuccessHandler(function (c) {
+      fill('maTK', c.taiKhoan, null);
+      fill('maDuAn', c.duAn, '— Để trống —');
+    }).getImportConfig();
+
+    function xemTruoc() {
+      var raw = document.getElementById('raw').value;
+      if (!raw.trim()) { show('Chưa có dữ liệu', false); return; }
+      document.getElementById('btnPreview').disabled = true;
+      google.script.run.withSuccessHandler(function (res) {
+        document.getElementById('btnPreview').disabled = false;
+        if (!res.ok) { show(res.message, false); return; }
+        var tb = document.querySelector('#tbl tbody'); tb.innerHTML = '';
+        res.rows.forEach(function (r) {
+          var tr = document.createElement('tr'); if (r.trung) tr.className = 'dup';
+          tr.innerHTML = '<td>' + r.ngay + '</td><td>' + r.loai + '</td><td class="right">' + vnd(r.soTien) +
+            '</td><td>' + (r.dienGiai || '') + (r.trung ? ' (trùng)' : '') + '</td>';
+          tb.appendChild(tr);
+        });
+        document.getElementById('tbl').style.display = res.rows.length ? 'table' : 'none';
+        document.getElementById('summary').textContent =
+          'Tổng ' + res.soDong + ' dòng · Thu ' + vnd(res.tongThu) + ' · Chi ' + vnd(res.tongChi) +
+          ' · Trùng (sẽ bỏ qua): ' + res.trung;
+        document.getElementById('btnConfirm').disabled = (res.soDong - res.trung) <= 0;
+        document.getElementById('msg').style.display = 'none';
+      }).previewImport(raw);
+    }
+
+    function xacNhan() {
+      var raw = document.getElementById('raw').value;
+      var maTK = document.getElementById('maTK').value;
+      var maDuAn = document.getElementById('maDuAn').value;
+      document.getElementById('btnConfirm').disabled = true;
+      google.script.run.withSuccessHandler(function (res) {
+        show(res.message, res.ok);
+        if (res.ok) { document.getElementById('tbl').style.display = 'none'; document.getElementById('summary').textContent = ''; }
+      }).withFailureHandler(function (err) {
+        document.getElementById('btnConfirm').disabled = false;
+        show('Lỗi: ' + err.message, false);
+      }).xacNhanImport(raw, maTK, maDuAn);
+    }
+  </script>
+</body>
+</html>

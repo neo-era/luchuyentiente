@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: #f5f6f8; color: #222; }
+    h2 { margin: 0 0 4px; color: #1f3864; font-size: 18px; }
+    .status { font-size: 12px; margin-bottom: 10px; }
+    .on { color: #137333; } .off { color: #b00; }
+    label { display: block; font-size: 13px; font-weight: bold; margin: 10px 0 4px; }
+    select, input, textarea { width: 100%; box-sizing: border-box; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px; background: #fff; }
+    .row { display: flex; gap: 8px; } .row > div { flex: 1; }
+    .btn { margin-top: 10px; padding: 11px 14px; background: #1f3864; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
+    .btn.sec { background: #fff; color: #1f3864; border: 1px solid #1f3864; }
+    .btn:disabled { opacity: .5; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    th { background: #eef; }
+    a { color: #1f3864; }
+    #msg { margin-top: 10px; padding: 10px; border-radius: 8px; display: none; font-size: 13px; }
+    .ok { background: #d9ead3; color: #274e13; } .err { background: #f4cccc; color: #990000; }
+    .wrap { max-height: 240px; overflow: auto; }
+    .hint { font-size: 11px; color: #666; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h2>📁 Hồ sơ dự án</h2>
+  <div class="status" id="status"></div>
+
+  <label>Dự án</label>
+  <select id="maDuAn" onchange="loadList()"></select>
+
+  <div class="row">
+    <div>
+      <label>Loại hồ sơ</label>
+      <select id="loai"></select>
+    </div>
+    <div>
+      <label>Ghi chú (tùy chọn)</label>
+      <input id="ghiChu" type="text">
+    </div>
+  </div>
+
+  <label>Chọn file (mọi định dạng, chọn nhiều được)</label>
+  <input id="file" type="file" multiple>
+  <div class="hint">File rất lớn (CAD, scan A3…) nên thả thẳng vào thư mục OneDrive rồi bấm “Đồng bộ”.</div>
+
+  <div class="bar">
+    <button class="btn" id="btnUp" onclick="upload()">⬆️ Tải lên OneDrive</button>
+    <button class="btn sec" onclick="openFolder()">📂 Mở thư mục OneDrive</button>
+    <button class="btn sec" onclick="sync()">🔄 Đồng bộ từ OneDrive</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <h2 style="font-size:15px;margin-top:16px">Danh sách hồ sơ</h2>
+  <div class="wrap">
+    <table id="tbl">
+      <thead><tr><th>Loại</th><th>Tên file</th><th>ĐD</th><th>KB</th><th>Ngày</th><th>Link</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    function opt(v, t) { var o = document.createElement('option'); o.value = v; o.textContent = t; return o; }
+    function show(m, ok) { var e = document.getElementById('msg'); e.textContent = m; e.className = ok ? 'ok' : 'err'; e.style.display = 'block'; }
+
+    google.script.run.withSuccessHandler(function (c) {
+      var dd = document.getElementById('maDuAn'); dd.innerHTML = '';
+      c.duAn.forEach(function (x) { dd.appendChild(opt(x.id, x.ten)); });
+      var l = document.getElementById('loai'); l.innerHTML = '';
+      c.loai.forEach(function (x) { l.appendChild(opt(x, x)); });
+      var st = document.getElementById('status');
+      if (c.ketNoi) { st.textContent = '● OneDrive đã kết nối'; st.className = 'status on'; }
+      else { st.textContent = '● Chưa kết nối OneDrive — chạy menu “Kết nối OneDrive” trước'; st.className = 'status off'; }
+      loadList();
+    }).getHoSoConfig();
+
+    function loadList() {
+      var maDuAn = document.getElementById('maDuAn').value;
+      if (!maDuAn) return;
+      google.script.run.withSuccessHandler(function (rows) {
+        var tb = document.querySelector('#tbl tbody'); tb.innerHTML = '';
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (r.loai || '') + '</td><td>' + r.tenFile + '</td><td>' + (r.dinhDang || '') +
+            '</td><td>' + r.kichThuoc + '</td><td>' + (r.ngay || '') + '</td><td>' +
+            (r.link ? '<a href="' + r.link + '" target="_blank">mở</a>' : '') + '</td>';
+          tb.appendChild(tr);
+        });
+      }).danhSachHoSo(maDuAn);
+    }
+
+    function upload() {
+      var files = document.getElementById('file').files;
+      if (!files.length) { show('Chưa chọn file', false); return; }
+      var maDuAn = document.getElementById('maDuAn').value;
+      var loai = document.getElementById('loai').value;
+      var ghiChu = document.getElementById('ghiChu').value;
+      var queue = Array.prototype.slice.call(files);
+      var done = 0, total = queue.length;
+      document.getElementById('btnUp').disabled = true;
+      show('Đang tải lên 0/' + total + '...', true);
+
+      function next() {
+        if (!queue.length) {
+          document.getElementById('btnUp').disabled = false;
+          show('Hoàn tất: ' + done + '/' + total + ' file.', done === total);
+          document.getElementById('file').value = '';
+          loadList();
+          return;
+        }
+        var f = queue.shift();
+        var reader = new FileReader();
+        reader.onload = function () {
+          var b64 = reader.result.split(',')[1];
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (res.ok) done++;
+              show('Đang tải lên ' + done + '/' + total + (res.ok ? '' : ' — lỗi: ' + res.message), true);
+              next();
+            })
+            .withFailureHandler(function (err) { show('Lỗi: ' + err.message, false); document.getElementById('btnUp').disabled = false; })
+            .uploadHoSo(maDuAn, loai, f.name, f.type, b64, ghiChu);
+        };
+        reader.readAsDataURL(f);
+      }
+      next();
+    }
+
+    function openFolder() {
+      var maDuAn = document.getElementById('maDuAn').value;
+      google.script.run.withSuccessHandler(function (res) {
+        if (res.ok && res.link) window.open(res.link, '_blank');
+        else show(res.message || 'Không lấy được link', false);
+      }).moFolderDuAnLink(maDuAn);
+    }
+
+    function sync() {
+      var maDuAn = document.getElementById('maDuAn').value;
+      show('Đang đồng bộ...', true);
+      google.script.run.withSuccessHandler(function (res) {
+        show(res.message, res.ok); loadList();
+      }).syncFolderDuAn(maDuAn);
+    }
+  </script>
+</body>
+</html>

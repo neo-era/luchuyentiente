@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: #f5f6f8; color: #222; }
+    h2 { margin: 0 0 12px; color: #1f3864; font-size: 18px; }
+    label { display: block; font-size: 13px; font-weight: bold; margin: 10px 0 4px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; background: #fff; }
+    .row { display: flex; gap: 8px; } .row > div { flex: 1; }
+    .seg { display: flex; gap: 8px; margin-top: 4px; }
+    .seg button { flex: 1; padding: 12px; border: 1px solid #1f3864; background: #fff; color: #1f3864; border-radius: 8px; font-size: 15px; font-weight: bold; }
+    .seg button.active { background: #1f3864; color: #fff; }
+    .btn { margin-top: 16px; width: 100%; padding: 14px; background: #1f3864; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; }
+    .btn:disabled { opacity: .5; }
+    #msg { margin-top: 12px; padding: 10px; border-radius: 8px; display: none; font-size: 14px; }
+    .ok { background: #d9ead3; color: #274e13; } .err { background: #f4cccc; color: #990000; }
+  </style>
+</head>
+<body>
+  <h2>💰 Nhập giao dịch</h2>
+
+  <label>Loại</label>
+  <div class="seg">
+    <button id="btnThu" class="active" onclick="setLoai('Thu')">Thu</button>
+    <button id="btnChi" onclick="setLoai('Chi')">Chi</button>
+  </div>
+
+  <div class="row">
+    <div><label>Ngày</label><input type="date" id="ngay"></div>
+    <div><label>Số tiền (₫)</label><input type="number" id="soTien" min="0" inputmode="numeric"></div>
+  </div>
+
+  <label>Tài khoản</label>
+  <select id="maTK"></select>
+
+  <label>Hạng mục</label>
+  <select id="maHangMuc"></select>
+
+  <label>Dự án</label>
+  <select id="maDuAn"><option value="">— Không —</option></select>
+
+  <label>Đối tác</label>
+  <select id="maDoiTac"><option value="">— Không —</option></select>
+
+  <label>Khớp kế hoạch (tùy chọn)</label>
+  <select id="maKH"><option value="">— Không khớp —</option></select>
+
+  <label>Diễn giải</label>
+  <textarea id="dienGiai" rows="2"></textarea>
+
+  <button class="btn" id="submit" onclick="luu()">Lưu giao dịch</button>
+  <div id="msg"></div>
+
+  <script>
+    var DATA = { taiKhoan: [], hangMuc: [], duAn: [], doiTac: [], keHoach: [] };
+    var loai = 'Thu';
+
+    function setLoai(l) {
+      loai = l;
+      document.getElementById('btnThu').className = (l === 'Thu' ? 'active' : '');
+      document.getElementById('btnChi').className = (l === 'Chi' ? 'active' : '');
+      renderHangMuc(); renderKeHoach();
+    }
+    function opt(v, t) { var o = document.createElement('option'); o.value = v; o.textContent = t; return o; }
+    function fill(id, arr, blank) {
+      var s = document.getElementById(id); s.innerHTML = '';
+      if (blank) s.appendChild(opt('', blank));
+      arr.forEach(function (x) { s.appendChild(opt(x.id, x.ten)); });
+    }
+    function renderHangMuc() {
+      fill('maHangMuc', DATA.hangMuc.filter(function (h) { return h.nhom === loai; }), null);
+    }
+    function renderKeHoach() {
+      var duAn = document.getElementById('maDuAn').value;
+      var arr = DATA.keHoach
+        .filter(function (k) { return k.loai === loai && (!duAn || k.duAn === duAn); })
+        .map(function (k) { return { id: k.id, ten: k.dienGiai + ' (' + Number(k.soTien).toLocaleString('vi-VN') + '₫)' }; });
+      fill('maKH', arr, '— Không khớp —');
+    }
+    function init(d) {
+      DATA = d;
+      fill('maTK', d.taiKhoan, null);
+      fill('maDuAn', d.duAn, '— Không —');
+      fill('maDoiTac', d.doiTac, '— Không —');
+      renderHangMuc(); renderKeHoach();
+      document.getElementById('ngay').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('maDuAn').onchange = renderKeHoach;
+    }
+    function show(m, ok) {
+      var e = document.getElementById('msg');
+      e.textContent = m; e.className = ok ? 'ok' : 'err'; e.style.display = 'block';
+    }
+    function luu() {
+      var soTien = Number(document.getElementById('soTien').value);
+      if (!(soTien > 0)) { show('Số tiền phải lớn hơn 0', false); return; }
+      var data = {
+        Ngay: document.getElementById('ngay').value,
+        Loai: loai,
+        SoTien: soTien,
+        MaTK: document.getElementById('maTK').value,
+        MaHangMuc: document.getElementById('maHangMuc').value,
+        MaDuAn: document.getElementById('maDuAn').value,
+        MaDoiTac: document.getElementById('maDoiTac').value,
+        MaKH: document.getElementById('maKH').value,
+        DienGiai: document.getElementById('dienGiai').value
+      };
+      document.getElementById('submit').disabled = true;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          document.getElementById('submit').disabled = false;
+          show(res.message, res.ok);
+          if (res.ok) {
+            document.getElementById('soTien').value = '';
+            document.getElementById('dienGiai').value = '';
+          }
+        })
+        .withFailureHandler(function (err) {
+          document.getElementById('submit').disabled = false;
+          show('Lỗi: ' + err.message, false);
+        })
+        .luuGiaoDichTuForm(data);
+    }
+    google.script.run.withSuccessHandler(init).getFormData();
+  </script>
+</body>
+</html>
