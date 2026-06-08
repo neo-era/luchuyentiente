@@ -542,6 +542,64 @@ function chayCaoBao(){
     .baoCaoDuAn();
 }
 
+// ── Mock google.script.run cho local preview ───────────────────────────────
+if(typeof google==='undefined'||!google.script){
+  var _mock={
+    withSuccessHandler:function(fn){this._ok=fn;return this;},
+    withFailureHandler:function(fn){this._err=fn;return this;},
+    getOverviewData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
+      soDuTK:[{maTK:'1',tenTK:'ACB',soDu:850000000},{maTK:'2',tenTK:'Sacombank',soDu:320000000},{maTK:'3',tenTK:'Tiền mặt',soDu:45000000}],
+      tongSoDu:1215000000,phaiThu:2160000000,phaiTra:630000000,soQuaHan:1,
+      giaoDichGanDay:[
+        {Ngay:new Date(),Loai:'Chi',SoTien:400000000,DienGiai:'[MẪU] Mua vật tư đèn LED',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'},
+        {Ngay:new Date(),Loai:'Chi',SoTien:150000000,DienGiai:'[MẪU] Nhân công lắp đặt',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'},
+        {Ngay:new Date(),Loai:'Thu',SoTien:648000000,DienGiai:'[MẪU] Tạm ứng 30%',MaDuAn:'da1',TenDuAn:'Cầu Cả Cấm'}
+      ]
+    });},200);},
+    getFormData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
+      taiKhoan:[{id:'1',ten:'ACB'},{id:'2',ten:'Sacombank'},{id:'3',ten:'Tiền mặt'}],
+      hangMuc:[{id:'h1',ten:'Thanh toán đợt',nhom:'Thu'},{id:'h2',ten:'Vật tư',nhom:'Chi'},{id:'h3',ten:'Nhân công',nhom:'Chi'}],
+      duAn:[{id:'da1',ten:'[MẪU] Chiếu sáng Cầu Cả Cấm'}],
+      doiTac:[],keHoach:[{id:'kh1',duAn:'da1',loai:'Thu',dienGiai:'Nghiệm thu đợt 60%',soTien:1296000000}]
+    });},200);},
+    getForecastData:function(){var self=this;setTimeout(function(){self._ok&&self._ok([
+      {thang:'06/2026',thuDuKien:648000000,chiDuKien:1200000000,soDuCuoi:663000000},
+      {thang:'07/2026',thuDuKien:0,chiDuKien:200000000,soDuCuoi:463000000},
+      {thang:'08/2026',thuDuKien:1296000000,chiDuKien:150000000,soDuCuoi:1609000000},
+      {thang:'09/2026',thuDuKien:0,chiDuKien:50000000,soDuCuoi:1559000000},
+      {thang:'10/2026',thuDuKien:216000000,chiDuKien:0,soDuCuoi:1775000000},
+      {thang:'11/2026',thuDuKien:0,chiDuKien:0,soDuCuoi:1775000000}
+    ]);},200);},
+    getCongNoData:function(){var self=this;setTimeout(function(){self._ok&&self._ok({
+      phaiThu:[{DienGiai:'[MẪU] Nghiệm thu đợt 60%',NgayDenHan:new Date(Date.now()+86400000*60),SoTienDuKien:1296000000,TrangThai:'ChuaToiHan'},
+               {DienGiai:'[MẪU] Quyết toán 10%',NgayDenHan:new Date(Date.now()-86400000*5),SoTienDuKien:216000000,TrangThai:'QuaHan'}],
+      phaiTra:[{DienGiai:'[MẪU] Thầu phụ kéo cáp',NgayDenHan:new Date(Date.now()+86400000*10),SoTienDuKien:80000000,TrangThai:'ChuaToiHan'}]
+    });},200);},
+    luuGiaoDichTuForm:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,message:'[Preview] Đã lưu (mock).'});},400);},
+    capNhatForecast:function(){var self=this;setTimeout(function(){self._ok&&self._ok();},600);},
+    previewImport:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,rows:[1,2,3],trung:0});},300);},
+    confirmImport:function(d){var self=this;setTimeout(function(){self._ok&&self._ok({ok:true,message:'[Preview] Import thành công (mock).'});},400);},
+    baoCaoDuAn:function(){var self=this;setTimeout(function(){self._ok&&self._ok();},600);},
+    moFormHoSo:function(){}
+  };
+  window.google={script:{run:_mock}};
+  // Mỗi lần gọi trả về instance mới để chain withSuccessHandler độc lập
+  var _base=_mock;
+  window.google.script.run=new Proxy(_base,{get:function(t,k){
+    if(k==='withSuccessHandler'||k==='withFailureHandler') return function(fn){
+      var inst=Object.assign(Object.create(null),_base);
+      inst._ok=k==='withSuccessHandler'?fn:undefined;
+      inst._err=k==='withFailureHandler'?fn:undefined;
+      return new Proxy(inst,{get:function(t2,k2){
+        if(k2==='withSuccessHandler') return function(f){t2._ok=f;return t2;};
+        if(k2==='withFailureHandler') return function(f){t2._err=f;return t2;};
+        return function(){if(typeof _base[k2]==='function') _base[k2].call(t2,...arguments);};
+      }});
+    };
+    return t[k];
+  }});
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 document.getElementById('hdr-date').textContent=fmtDate(new Date());
 loadAll();
